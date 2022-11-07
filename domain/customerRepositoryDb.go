@@ -4,42 +4,43 @@ import (
 	"database/sql"
 	"log"
 	"mux-route/helper"
-	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/jmoiron/sqlx"
 )
 
 type CustomerRepositoryDb struct {
-	client *sql.DB
+	client *sqlx.DB
 }
 
-func (d CustomerRepositoryDb) FindAll() ([]Customer, error) {
+func NewCustomerRepositoryDb(dbClient *sqlx.DB) CustomerRepositoryDb {
+	return CustomerRepositoryDb{dbClient}
+}
 
-	sql := "select customer_id,name,city,zipcode,date_of_birth,status from customers"
+func (d CustomerRepositoryDb) FindAll(status string) ([]Customer, *helper.AppError) {
 
-	rows, err := d.client.Query(sql)
-	if err != nil {
-		log.Println("Error while querying customers table: ", err.Error())
-	}
+	var err error
 	customers := make([]Customer, 0)
-	for rows.Next() {
-		var c Customer
-		err := rows.Scan(&c.Id, &c.Name, &c.City, &c.Zipcode, &c.DateOfBirth, &c.Status)
-		if err != nil {
-			log.Println("Error while scanning customer table: ", err.Error())
-		}
-		customers = append(customers, c)
+	if status == "" {
+		sql := "select customer_id,name,city,zipcode,date_of_birth,status from customers"
+		err = d.client.Select(&customers, sql)
+	} else {
+		sql := "select customer_id, name, city, zipcode, date_of_birth, status from customers where status = ?"
+		err = d.client.Select(&customers, sql, status)
 	}
+
+	if err != nil {
+		return nil, helper.NewUnexpectedError("Unexpected database error")
+	}
+
 	return customers, nil
 }
 
 func (d CustomerRepositoryDb) ById(id string) (*Customer, *helper.AppError) {
 	findById := "select customer_id,name,city,zipcode,date_of_birth,status from customers where customer_id = ?"
 
-	row := d.client.QueryRow(findById, id)
-
 	var c Customer
-	err := row.Scan(&c.Id, &c.Name, &c.City, &c.Zipcode, &c.DateOfBirth, &c.Status)
+	err := d.client.Get(&c, findById, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, helper.NewNotFoundError("customers not found")
@@ -50,17 +51,4 @@ func (d CustomerRepositoryDb) ById(id string) (*Customer, *helper.AppError) {
 	}
 
 	return &c, nil
-}
-
-func NewCustomerRepositoryStDb() CustomerRepositoryDb {
-	client, err := sql.Open("mysql", "root:endi@tcp(localhost:3306)/banking")
-	if err != nil {
-		panic(err)
-	}
-
-	client.SetConnMaxLifetime(time.Minute * 3)
-	client.SetMaxOpenConns(10)
-	client.SetMaxIdleConns(10)
-
-	return CustomerRepositoryDb{client: client}
 }
