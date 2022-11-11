@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
+	"github.com/newrelic/go-agent/v3/newrelic"
 )
 
 func sanityCheck() {
@@ -42,11 +43,16 @@ func Start() {
 	// account handler
 	ah := AccountHandler{accountService}
 
-	router.HandleFunc("/customers", ch.GetAllCustomer).Methods(http.MethodGet)
-	router.HandleFunc("/customers/{customer_id:[0-9]+}", ch.GetCustomer).Methods(http.MethodGet)
+	app, _ := newrelic.NewApplication(
+		newrelic.ConfigAppName("banking"),
+		newrelic.ConfigLicense("ae0bc44af2ed7136477b2668027f21c7e172NRAL"),
+		newrelic.ConfigAppLogForwardingEnabled(true),
+	)
+	router.HandleFunc(newrelic.WrapHandleFunc(app, "/customers", ch.GetAllCustomer)).Methods(http.MethodGet)
+	router.HandleFunc(newrelic.WrapHandleFunc(app, "/customers/{customer_id:[0-9]+}", ch.GetCustomer)).Methods(http.MethodGet)
 
 	// account handler
-	router.HandleFunc("/customers/{customer_id:[0-9]+}/account", ah.NewAccount).Methods(http.MethodPost)
+	router.HandleFunc(newrelic.WrapHandleFunc(app, "/customers/{customer_id:[0-9]+}/account", ah.NewAccount)).Methods(http.MethodPost)
 
 	address := os.Getenv("SERVER_ADDRESS")
 	port := os.Getenv("SERVER_PORT")
@@ -57,7 +63,7 @@ func Start() {
 func getDbClient() *sqlx.DB {
 
 	dbUser := os.Getenv("DB_USER")
-	dbPasswd := os.Getenv("DB_PASSWD")
+	dbPasswd := os.Getenv("DB_PASSWORD")
 	dbAddr := os.Getenv("DB_ADDR")
 	dbPort := os.Getenv("DB_PORT")
 	dbName := os.Getenv("DB_NAME")

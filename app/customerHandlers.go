@@ -1,12 +1,14 @@
 package app
 
 import (
+	"errors"
 	"mux-route/helper"
 	"mux-route/logger"
 	"mux-route/service"
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/newrelic/go-agent/v3/newrelic"
 )
 
 type CustomerHandlers struct {
@@ -16,6 +18,9 @@ type CustomerHandlers struct {
 func (ch *CustomerHandlers) GetAllCustomer(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
 	customers, err := ch.service.GetAllCustomer(status)
+
+	txn := newrelic.FromContext(r.Context())
+	txn.NoticeError(errors.New("my error message"))
 	if err != nil {
 		helper.WriteResponse(w, http.StatusNotFound, err.ASMessage())
 		return
